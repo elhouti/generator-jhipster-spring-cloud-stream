@@ -1,0 +1,77 @@
+<%#
+ Copyright 2013-2020 the original author or authors from the JHipster project.
+
+ This file is part of the JHipster project, see https://www.jhipster.tech/
+ for more information.
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-%>
+package <%= packageName %>.service.kafka.producer;
+
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import javax.annotation.PostConstruct;
+
+import <%= packageName %>.config.KafkaProperties;
+<%_ if (type !== 'String') { _%>
+import <%= packageName %>.domain.<%= entityClass %>;
+<%_ } _%>
+
+@Service
+public class <%= entityClass %>Producer {
+
+<%_ if (entityOrdered) { _%>
+    enum <%= entityClass %>ProducerKey {
+        <%= _.toUpper(entityClass) %>_CREATE, <%= _.toUpper(entityClass) %>_READ, <%= _.toUpper(entityClass) %>_UPDATE, <%= _.toUpper(entityClass) %>_DELETE
+    }
+
+<%_ } _%>
+    private final Logger log = LoggerFactory.getLogger(<%= entityClass %>Producer.class);
+
+    private final KafkaProducer<String, <%= type %>> kafkaProducer;
+
+    private final String topicName;
+
+    public <%= entityClass %>Producer(@Value("${kafka.topic.<%= camelCaseEntityClass %>}") final String topicName, final KafkaProperties kafkaProperties) {
+        this.topicName = topicName;
+        this.kafkaProducer = new KafkaProducer<>(kafkaProperties.getProducer().get("<%= camelCaseEntityClass %>"));
+    }
+
+    @PostConstruct
+    public void init() {
+        Runtime.getRuntime().addShutdownHook(new Thread(this::shutdown));
+    }
+
+    public void send(final <%= type %> message) {
+<%_ if (entityOrdered) { _%>
+        final ProducerRecord<String, <%= type %>> record = new ProducerRecord<>(topicName, <%= entityClass %>ProducerKey.<%= _.toUpper(entityClass) %>_READ.toString(), message);
+<%_ } else { _%>
+        final ProducerRecord<String, <%= type %>> record = new ProducerRecord<>(topicName, message);
+<%_ } _%>
+        try {
+            log.info("Sending asynchronously a <%= type %> record to topic: '" + topicName + "'");
+            kafkaProducer.send(record);
+        } catch (final Exception e) {
+            log.error(e.getMessage(), e);
+        }
+    }
+
+    public void shutdown() {
+        log.info("Shutdown Kafka producer");
+        kafkaProducer.close();
+    }
+}
